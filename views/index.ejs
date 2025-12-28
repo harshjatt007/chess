@@ -3,71 +3,427 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Chess Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            --bg-dark: #302e2b;
+            --panel-bg: #262421;
+            --text-main: #bababa;
+            --square-light: #ebecd0;
+            --square-dark: #739552;
+            --last-move-bg: rgba(255, 255, 0, 0.5);
+            --legal-dot: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            min-height: calc(100vh - 40px);
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .board-container {
+            position: relative;
+            background: #312e2b;
+            padding: 0;
+            border-radius: 4px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+            overflow: hidden;
+            width: fit-content;
+        }
+
         .chessboard {
             display: grid;
-            grid-template-columns: repeat(8, minmax(0, 1fr));
-            grid-template-rows: repeat(8, minmax(0, 1fr));
-            width: 400px;
-            height: 400px;
-            transform: rotate(0deg);
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 600px;
+            height: 600px;
+            user-select: none;
         }
 
-        .piece.white {
-            color: white;
-            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 1));
+        /* Coordinates Overlay */
+        .coordinates {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
         }
 
-        .piece.black {
-            color: black;
-        }
+        .coordinate-light { fill: #ebecd0; font-family: inherit; font-weight: 700; font-size: 2.8px; }
+        .coordinate-dark { fill: #739552; font-family: inherit; font-weight: 700; font-size: 2.8px; }
 
-        .flipped {
-            transform: rotate(180deg);
-        }
+        .flipped .coordinates { transform: rotate(180deg); }
+        .flipped .coordinates text { transform: rotate(180deg); transform-origin: center; }
 
         .square {
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .square.light {
-            background-color: #f0d9b5;
+        .square.light { background-color: var(--square-light); }
+        .square.dark { background-color: var(--square-dark); }
+
+        .square.last-move {
+            background-color: rgba(255, 255, 0, 0.45) !important;
         }
 
-        .square.dark {
-            background-color: #b58863;
+        .square.selected-square {
+            background-color: rgba(255, 255, 0, 0.6) !important;
+        }
+
+        .legal-indicator {
+            width: 22px;
+            height: 22px;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .square.capture-indicator::after {
+            content: '';
+            position: absolute;
+            width: 85%;
+            height: 85%;
+            border: 6px solid rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
         }
 
         .piece {
-            font-size: 36px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: grab;
+            z-index: 10;
+        }
+
+        .piece img {
+            width: 90%;
+            height: 90%;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            transition: transform 0.1s;
+        }
+
+        .piece:active { cursor: grabbing; }
+
+        .ui-panel {
+            width: 380px;
+            background: #21201d; /* Chess.com sidebar color */
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            height: 620px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            background: rgba(0,0,0,0.2);
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .panel-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #8b8987;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .panel-tab.active {
+            color: #fff;
+            border-bottom-color: #81b64c;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .tab-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            position: relative;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .move-history {
+            flex-grow: 1;
+            padding: 0;
+            font-size: 14px;
+            background: #262421;
+        }
+
+        .move-row {
+            display: grid;
+            grid-template-columns: 45px 1fr 1fr;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            align-items: center;
+        }
+        
+        .move-row:nth-child(even) {
+            background: rgba(255,255,255,0.01);
+        }
+
+        .move-number { 
+            color: #8b8987; 
+            text-align: center;
+            background: rgba(0,0,0,0.1);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .move-history div:not(.move-number) {
+            padding-left: 15px;
+            color: #bababa;
             cursor: pointer;
         }
 
-        .piece.draggable {
-            cursor: grab;
+        .move-history div:not(.move-number):hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
         }
 
-        .dragging {
-            opacity: 0.5;
+        .notification-dot {
+            position: absolute;
+            top: 8px;
+            right: 20%;
+            width: 8px;
+            height: 8px;
+            background: #ff4444;
+            border-radius: 50%;
+            display: none;
+            box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
         }
 
-        /* Rotate pieces for black player */
-        .flipped .piece {
-            transform: rotate(180deg);
+        #chat-content {
+            background: #262421;
         }
+
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-message {
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+
+        .message-system {
+            background: rgba(255,255,255,0.05);
+            color: #8b8987;
+            align-self: center;
+            text-align: center;
+            font-style: italic;
+            font-size: 11px;
+        }
+
+        .message-white {
+            background: #f1f1f1;
+            color: #000;
+            align-self: flex-start;
+        }
+
+        .message-black {
+            background: #3c3a37;
+            color: #fff;
+            align-self: flex-end;
+        }
+
+        .chat-input-container {
+            padding: 12px;
+            background: rgba(0,0,0,0.2);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .flex { display: flex; }
+        .gap-2 { gap: 8px; }
+        .w-full { width: 100%; }
+        .block { display: block; }
+        .mb-1 { margin-bottom: 4px; }
+
+        .chat-input {
+            flex-grow: 1;
+            background: #3c3a37;
+            border: 1px solid #4d4b48;
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .chat-input:focus {
+            border-color: #81b64c;
+        }
+
+        .chat-send {
+            background: #81b64c;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 0 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .chat-send:hover {
+            background: #a3d16a;
+        }
+
+        .captured-pieces {
+            padding: 12px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: -2px; /* Slight overlap like chess.com */
+            min-height: 44px;
+            align-items: center;
+        }
+
+        .captured-piece {
+            width: 24px;
+            height: 24px;
+            margin-right: -8px; /* Stacked pieces effect */
+            transition: transform 0.2s;
+        }
+        
+        .captured-piece:hover {
+            transform: translateY(-2px);
+            z-index: 20;
+        }
+
+        .captured-piece img { width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+
+        .game-info-footer {
+            padding: 15px 20px;
+            background: rgba(0,0,0,0.3);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .flipped { transform: rotate(180deg); }
+        .flipped .piece { transform: rotate(180deg); }
+        .flipped .legal-indicator, .flipped .capture-indicator::after { transform: rotate(180deg); }
+
+        .dragging { opacity: 0; }
     </style>
 </head>
 <body>
-    
-    <div class="w-full h-screen flex items-center justify-center bg-zinc-900">
-        <div class="chessboard w-96 h-96 bg-red-400"></div>
+    <div class="main-container">
+        <div class="board-container">
+            <svg viewBox="0 0 100 100" class="coordinates" aria-hidden="true">
+                <!-- Ranks -->
+                <text x="0.75" y="3.5" class="coordinate-light">8</text>
+                <text x="0.75" y="15.75" class="coordinate-dark">7</text>
+                <text x="0.75" y="28.25" class="coordinate-light">6</text>
+                <text x="0.75" y="40.75" class="coordinate-dark">5</text>
+                <text x="0.75" y="53.25" class="coordinate-light">4</text>
+                <text x="0.75" y="65.75" class="coordinate-dark">3</text>
+                <text x="0.75" y="78.25" class="coordinate-light">2</text>
+                <text x="0.75" y="90.5" class="coordinate-dark">1</text>
+                <!-- Files -->
+                <text x="10" y="99" class="coordinate-dark">a</text>
+                <text x="22.5" y="99" class="coordinate-light">b</text>
+                <text x="35" y="99" class="coordinate-dark">c</text>
+                <text x="47.5" y="99" class="coordinate-light">d</text>
+                <text x="60" y="99" class="coordinate-dark">e</text>
+                <text x="72.5" y="99" class="coordinate-light">f</text>
+                <text x="85" y="99" class="coordinate-dark">g</text>
+                <text x="97.5" y="99" class="coordinate-light">h</text>
+            </svg>
+            <div class="chessboard"></div>
+        </div>
+        
+        <div class="ui-panel">
+            <div class="panel-header">
+                <div>
+                    <span>Chess Chat</span>
+                    <div id="role-status" class="text-[10px] text-zinc-500 font-normal uppercase tracking-tighter">Connecting...</div>
+                </div>
+                <span id="turn-indicator" class="text-xs uppercase px-2 py-1 bg-zinc-100 text-zinc-900 font-bold rounded">White's Turn</span>
+            </div>
+            
+            <div id="captured-black" class="captured-pieces"></div>
+            
+            <div id="chat-content" class="tab-content active">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-message message-system">Welcome to the game!</div>
+                </div>
+                <div class="chat-input-container">
+                    <div id="chat-role-label" class="text-[9px] font-bold uppercase text-zinc-500 mb-1 w-full block">Chatting as Spectator</div>
+                    <div class="flex gap-2 w-full">
+                        <input type="text" id="chat-input" class="chat-input" placeholder="Type a message...">
+                        <button id="chat-send" class="chat-send">Send</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="captured-white" class="captured-pieces"></div>
+            
+            <div class="game-info-footer">
+                <div id="game-status" class="text-zinc-400 text-sm font-medium">Game Ongoing</div>
+                <div class="mt-1 text-[10px] text-zinc-500 uppercase tracking-widest">harshjatt007/chess</div>
+            </div>
+        </div>
     </div>
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" integrity="sha512-xRllwz2gdZciIB+AkEbeq+gVhX8VB8XsfqeFbUh+SzHlN96dEduwtTuVuc2u9EROlmW9+yhRlxjif66ORpsgVA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/js/chessgame.js"></script>
 </body>
 </html>
